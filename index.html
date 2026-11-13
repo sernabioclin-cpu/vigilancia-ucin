@@ -173,6 +173,7 @@ details.card summary{color:inherit;font-size:14px;margin:0;display:flex;gap:6px;
 .tbl.ctl td,.tbl.ctl th{padding:4px 6px}
 .tab-rep .rt{font-size:10.5pt}.tab-rep .rt td{padding:7px 8px;vertical-align:middle}.tab-rep .big2{font-size:15pt;font-weight:700}
 .tab-rep h1{font-size:17pt}
+.btn.sm{padding:5px 10px;min-height:0;font-size:12.5px;margin-left:6px}
 </style>
 </head>
 <body>
@@ -320,7 +321,7 @@ https://github.com/nodeca/pako/blob/main/LICENSE
     const mr = await H('Matriz_riesgos');
     for (let i = 0; i < 20; i++) {
       const x = E.riesgos[i + 1] || {}, r = 5 + i;
-      mr.poner('B' + r, x.riesgo || ''); mr.poner('C' + r, x.causas || ''); mr.poner('D' + r, num(x.p)); mr.poner('E' + r, num(x.i));
+      mr.poner('B' + r, x.riesgo ? x.riesgo + (x.validado ? '' : ' (propuesta, por validar)') : ''); mr.poner('C' + r, x.causas || ''); mr.poner('D' + r, num(x.p)); mr.poner('E' + r, num(x.i));
       mr.poner('H' + r, x.accion || ''); mr.poner('I' + r, x.reactivo || ''); mr.poner('J' + r, x.resp || ''); mr.poner('K' + r, serial(x.fecha));
       mr.poner('L' + r, x.estatus || ''); mr.poner('M' + r, x.avance === '' || x.avance === undefined ? '' : num(x.avance) / 100);
     }
@@ -976,14 +977,19 @@ https://github.com/nodeca/pako/blob/main/LICENSE
     const E = entrada();
     const ks = Object.keys(E.riesgos).map(Number).filter(k => E.riesgos[k] && E.riesgos[k].riesgo).sort((a, b) => a - b);
     const prom = ks.length ? ks.reduce((a, k) => a + (Number(E.riesgos[k].avance) || 0), 0) / ks.length : '';
+    const pv = ks.filter(k => !E.riesgos[k].validado).length, cumple = prom > 75 && pv === 0;
     let h = barra('Matriz de riesgos') + '<main class="wrap">';
-    h += '<div class="card"><div class="kvs"><div class="kv ' + (prom > 75 ? 'okk' : 'mid') + '"><b>' + (prom === '' ? '—' : Math.round(prom) + '%') + '</b><span>Avance promedio</span></div><div class="kv ' + (prom > 75 ? 'okk' : 'bad') + '"><b>' + (prom > 75 ? 'CUMPLE' : 'NO CUMPLE') + '</b><span>GOB-10 (avance >75%)</span></div></div>' +
+    if (pv) h += '<div class="card aviso"><b>' + pv + ' de ' + ks.length + ' riesgos son propuesta, por validar.</b> Los propuso la Subdirección de Planeación y Calidad como punto de partida: la UVEH y el CODECIAAS deciden si aplican, califican probabilidad e impacto y asignan responsables.' + (esUVEH() ? ' Al aprobar cada uno, ábralo y pulse <b>Validado por el CODECIAAS</b>.' : '') + '</div>';
+    h += '<div class="card"><div class="kvs"><div class="kv ' + (prom > 75 ? 'okk' : 'mid') + '"><b>' + (prom === '' ? '—' : Math.round(prom) + '%') + '</b><span>Avance promedio</span></div><div class="kv ' + (cumple ? 'okk' : 'bad') + '"><b>' + (cumple ? 'CUMPLE' : 'NO CUMPLE') + '</b><span>GOB-10 (matriz validada y avance >75%)</span></div></div>' +
       '<div class="row"><label>Última revisión en CODECIAAS</label><input type="date" data-a="param" data-k="revRiesgos" value="' + esc(E.params.revRiesgos || '') + '" style="max-width:200px"></div></div>';
     ks.forEach(k => {
       const x = E.riesgos[k], n = (Number(x.p) || 0) * (Number(x.i) || 0);
       const pr = !n ? '' : n >= 15 ? 'Alta' : n >= 8 ? 'Media' : 'Baja';
       const f = (c, l, tipo, extra) => '<div class="fld"><span class="lb">' + l + '</span><input type="' + (tipo || 'text') + '" data-a="riesgo" data-n="' + k + '" data-k="' + c + '" value="' + esc(x[c] === undefined ? '' : x[c]) + '"' + (extra || '') + '></div>';
-      h += '<details class="card"><summary><b>' + k + '. ' + esc(x.riesgo) + '</b> <span class="sem ' + ({ Alta: 'r', Media: 'a', Baja: 'v' }[pr] || 'g') + '">' + (pr || '—') + ' ' + (n || '') + '</span> <span class="sem g">' + esc(x.estatus || 'Pendiente') + ' · ' + (Number(x.avance) || 0) + '%</span></summary><div class="form2" style="margin-top:8px">' +
+      h += '<details class="card"><summary><b>' + k + '. ' + esc(x.riesgo) + '</b> <span class="sem ' + ({ Alta: 'r', Media: 'a', Baja: 'v' }[pr] || 'g') + '">' + (pr || '—') + ' ' + (n || '') + '</span> <span class="sem g">' + esc(x.estatus || 'Pendiente') + ' · ' + (Number(x.avance) || 0) + '%</span>' + (x.validado ? '' : ' <span class="sem a">Propuesta, por validar</span>') + '</summary>' +
+        (x.validado ? '<p class="xs muted" style="margin:8px 0 0">✓ Validado por el CODECIAAS el ' + fc(x.validado) + (x.valido ? ' · registró ' + esc(x.valido) : '') + (esUVEH() ? ' · <button class="lnk" data-a="riesgoVal" data-n="' + k + '" data-v="0">quitar validación</button>' : '') + '</p>'
+          : '<div class="auto no" style="margin-top:8px">Propuesta, por validar en el CODECIAAS.' + (esUVEH() ? ' <button class="btn sm" data-a="riesgoVal" data-n="' + k + '" data-v="1">Validado por el CODECIAAS</button>' : '') + '</div>') +
+        '<div class="form2" style="margin-top:8px">' +
         f('riesgo', 'Riesgo') + f('causas', 'Causas principales') + f('p', 'Probabilidad (1–5)', 'number', ' min="1" max="5"') + f('i', 'Impacto (1–5)', 'number', ' min="1" max="5"') + f('accion', 'Acción de control') + f('reactivo', 'Reactivo / indicador') + f('resp', 'Responsable') + f('fecha', 'Fecha compromiso', 'date') +
         '<div class="fld"><span class="lb">Estatus</span>' + chips('riesgoC', 'estatus', ['Pendiente', 'En proceso', 'Cumplida'], x.estatus, ' data-n="' + k + '"') + '</div>' + f('avance', 'Avance (%)', 'number', ' min="0" max="100" step="5"') + '</div></details>';
     });
@@ -1141,6 +1147,12 @@ https://github.com/nodeca/pako/blob/main/LICENSE
     },
     casoBorrar() { if (!confirm('¿Borrar este caso?')) return; const r0 = rec('caso', S.id); put('caso', S.id, r0 ? r0.d : {}, true); EDIT = null; ir({ p: 'casos' }); },
     riesgoC(el) { const k = el.dataset.n, E = entrada(), d = Object.assign({}, E.riesgos[k]); d.estatus = d.estatus === el.dataset.val ? '' : el.dataset.val; if (d.estatus === 'Cumplida') d.avance = 100; put('riesgo', k, d); render(true); },
+    riesgoVal(el) {
+      const k = el.dataset.n, d = Object.assign({}, entrada().riesgos[k]);
+      if (el.dataset.v === '1') { if (!confirm('¿El CODECIAAS aprobó este riesgo, su calificación P×I, la acción y el responsable?')) return; d.validado = hoy(); d.valido = CFG.nombre; }
+      else { delete d.validado; delete d.valido; }
+      put('riesgo', k, d); render(true);
+    },
     riesgoNuevo() { const E = entrada(); let k = 1; while (E.riesgos[k] && E.riesgos[k].riesgo) k++; put('riesgo', k, { riesgo: 'Nuevo riesgo', estatus: 'Pendiente', avance: 0 }); render(true); },
     desabNuevo() { put('desab', uid(), { inicio: hoy() }); render(true); },
     desabBorrar(el) { if (!confirm('¿Borrar este registro?')) return; const r0 = rec('desab', el.dataset.id); put('desab', el.dataset.id, r0 ? r0.d : {}, true); render(true); },
